@@ -100,7 +100,7 @@ parfor i=1:totalFrames
     Psz=size(P);
     
     % Pad image if necessary 
-    % NTS: this should be folded into Im intialization
+    % NTS: this should be incorporated into Im intialization in future
     x1=round((imszX-Psz(1))/2);
     y1=round((imszY-Psz(2))/2);
     

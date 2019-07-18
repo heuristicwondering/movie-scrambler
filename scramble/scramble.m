@@ -17,7 +17,7 @@
 % -- Again, due to limitations in MATLAB, scrambled videos are
 % uncompressed. An attempt to compress them is made by making a call to the
 % ffmpeg libraries. If these are not installed and also (at least for 
-% Windows) enabled on the the command line, then these will need to be 
+% Windows) enabled on the the command line, then movies will need to be 
 % compressed afterwards with a 3rd party software.
 %
 % An example of compressing generated video if you are using ffmpeg.
