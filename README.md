@@ -3,6 +3,7 @@ Creates scrambled versions of short movie clips. Be aware that this program is n
 
 A short user manual has been provided. It is intended to help those who may have little to no experience working with MATLAB scripts to get started using this program.
 
+If this code or any derivation thereof is used in publication, please include appropriate acknowledgments. The author of this work would also be grateful if you could contact them with a citation for that publication.
 
 -----------------------------------------------------------
 Acknowledgments:
@@ -23,4 +24,4 @@ Created as part of design improvements to the paradigm described in:
 -----------------------------------------------------------
 License:
 -----------------------------------------------------------
-TBD
+This work is released under an MIT license.
