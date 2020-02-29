@@ -58,10 +58,10 @@ fprintf('\n\nIf you found this program useful, please consider sharing it.\n');
 function ok = setup()
     % Check that user has the Computer Vision Toolbox installed.
     ok = true;
-    hasIPT = license('test', 'Distrib_Computing_Toolbox');
+    hasIPT = license('test', 'Video_and_Image_Blockset');
     if ~hasIPT
       % User does not have the toolbox installed.
-      message = sprintf('Sorry, but you do not seem to have the Parallel Computing Toolbox.\nDo you want to try to continue anyway?');
+      message = sprintf('Sorry, but you do not seem to have the Computer Vision Toolbox.\nDo you want to try to continue anyway?');
       reply = questdlg(message, 'Toolbox missing', 'Yes', 'No', 'Yes');
       if strcmpi(reply, 'No')
         % User said No, so exit.
