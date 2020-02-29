@@ -1,7 +1,7 @@
 function warpedData = diffeomorphic( imgData, varargin )
 %===========================================================================
 % Create diffewarped images.
-%   warpedData = diffeomorphic( imgData, warpParams );
+%   warpedData = diffeomorphic( imgData, warpParams,  );
 %
 % INPUT:
 % imgData - data to be distorted. Distortion calculated along rows and and
@@ -13,7 +13,11 @@ function warpedData = diffeomorphic( imgData, varargin )
 % warpParams - optional set of warping parameters. This is provided as a 2
 %   element numeric array in which the first element is the maximum amount  
 %   of distortion applied to the image(s). The second element determines 
-%   how many times a warp is applied to an image.
+%   how many times a warp is applied to an image. Default if no argument is
+%   provided is 60 and 40.
+%
+% usePool - optional flag to enable parallelization of applying warps
+%   across movie frames. Default is false.
 %
 % OUTPUT:
 % warpedData -- resampled data after applying warps.
@@ -46,9 +50,6 @@ function warpedData = diffeomorphic( imgData, varargin )
 
 boundscheck( imgData, varargin{:} );
 
-% this flag allows me to start a parallel pool externally
-
-
 % setting warp paramters
 maxdistortion=60; % changes max amount of distortion
 nsteps=40; % number of steps
@@ -58,96 +59,49 @@ if numel(varargin) >= 1
     nsteps = warpParams(2);
 end
 
-imszX= 2 * size(imgData, 1);
-imszY = 2 * size(imgData, 2);
-imszZ = size(imgData, 3);
+% this flag allows parrallel application of warps
+usePool = false;
+if numel(varargin) == 2
+    usePool = varargin{2};
+end
 
-[YI, XI]=meshgrid(1:imszY,1:imszX);
+imsz.X= 2 * size(imgData, 1);
+imsz.Y = 2 * size(imgData, 2);
+imsz.Z = size(imgData, 3);
+
+% average value of image for background
+imgBackground=ones(imsz.X,imsz.Y,imsz.Z);
+for page = 1:imsz.Z
+    imgBackground(:,:,page) = imgBackground(:,:,page) * mean( imgData(:,:,page), 'all' );
+end
+
+[YI, XI]=meshgrid(1:imsz.Y,1:imsz.X);
 
 % creating a single warp to apply to all images
-[cxA, cyA]=getdiffeo(imszX, imszY, maxdistortion,nsteps);
-[cxB, cyB]=getdiffeo(imszX, imszY, maxdistortion,nsteps);
-[cxF, cyF]=getdiffeo(imszX, imszY, maxdistortion,nsteps);
+[c.xA, c.yA]=getdiffeo(imsz.X, imsz.Y, maxdistortion,nsteps);
+[c.xB, c.yB]=getdiffeo(imsz.X, imsz.Y, maxdistortion,nsteps);
+[c.xF, c.yF]=getdiffeo(imsz.X, imsz.Y, maxdistortion,nsteps);
 
 warpedData = zeros( size( imgData ) ); 
 totalFrames = size(imgData, 4); % This is the number of frames/images to warp
 
-spmd
-   warning('off', 'MATLAB:mir_warning_maybe_uninitialized_temporary'); 
-end
-
 % applying warp
-parfor i=1:totalFrames
-    
-    fprintf('\nApplying warp for image %i of %i.\n', i, totalFrames );
-    
-    P = imgData(:,:,:,i);
-    Psz = [ size(P,1), size(P,2), size(P,3) ]; % including 3rd dim even if size is 1.
-    
-    % average value of image for background
-    Im=ones(imszX,imszY,imszZ);
-    for page = 1:imszZ
-        Im(:,:,page) = Im(:,:,page) * mean( P(:,:,page), 'all' );
-    end
-    
-    % Upsample by factor of 2 in two dimensions
-    P2=zeros([2*Psz(1:2),Psz(3)]);
-    P2(1:2:end,1:2:end,:)=P;
-    P2(2:2:end,1:2:end,:)=P;
-    P2(2:2:end,2:2:end,:)=P;
-    P2(1:2:end,2:2:end,:)=P;
-    P=P2;
-    Psz=size(P);
-    
-    % Pad image if necessary 
-    % NTS: this should be folded into Im intialization
-    x1=round((imszX-Psz(1))/2);
-    y1=round((imszY-Psz(2))/2);
-    
-    Im((x1+1):(x1+Psz(1)),(y1+1):(y1+Psz(2)),:)=P;
-        
-    interpIm=Im;
+if usePool
+    parfor i=1:totalFrames   
+        fprintf('\nApplying warp for image %i of %i.\n', i, totalFrames );
 
-    for quadrant=1:4
-        switch (quadrant)
-            case 1
-                cx=cxA;
-                cy=cyA;
-            case 2
-                cx=cxF-cxA;
-                cy=cyF-cyA;
-            case 3
-                cx=cxB;
-                cy=cyB;
-            case 4
-                cx=cxF-cxB;
-                cy=cyF-cyB;
-        end
-        
-        % prevent sampling out of bounds of the image
-        cy=YI+cy;
-        cx=XI+cx;
-        mask=(cx<1) | (cx>imszX) | (cy<1) | (cy>imszY) ;
-        cx(mask)=1;
-        cy(mask)=1;
-        
-
-        for j=1:nsteps % this is the number of steps - Total number of warps is nsteps * quadrant
-            for page = 1:imszZ
-                interpIm(:,:,page)=interp2(double(interpIm(:,:,page)),cy,cx);
-            end
-        end
-                
+        warpedP = applydiffeo( imgData(:,:,:,i), imgBackground, imsz, YI, XI, c, nsteps);
+        warpedData(:,:,:,i) = warpedP;
     end
-    
-    % down sampling to original dimensions
-    warpedData(:,:,:,i) = interpIm(1:2:end, 1:2:end, :);
+else
+    for i=1:totalFrames   
+        fprintf('\nApplying warp for image %i of %i.\n', i, totalFrames );
+
+        warpedP = applydiffeo( imgData(:,:,:,i), imgBackground, imsz, YI, XI, c, nsteps);
+        warpedData(:,:,:,i) = warpedP;
+    end
 end
 
-% cleaning up
-% spmd
-%    warning('on', 'MATLAB:mir_warning_maybe_uninitialized_temporary'); 
-% end
 
 end
 
@@ -157,11 +111,11 @@ imgDims = size(imgData);
 if numel(imgDims) > 4
     error('diffeomorphic:TooManyDimensions', 'Expecting image(s) in no more than 4 dimensions.');
 elseif numel(varargin) > 2
-    error('diffeomorphic:TooManyInputs', 'Expecting only 1 or 2 inputs.');
+    error('diffeomorphic:TooManyInputs', 'Expecting only 1 to 3 inputs.');
 elseif numel(varargin) >= 1
     option = varargin{1};
     err = 'Expecting 1 by 2 non-negative numeric array for warp parameters';
-    if ~all( size(option) == [1, 2] | size(option) == [2, 1])
+    if ~all( size(option) == [1, 2] ) && ~all(size(option) == [2, 1])
         error('diffeomorphic:IncorrectSize', err);
     elseif any( option < 0 )
         error('diffeomorphic:NegativeNumbersDisallowed', err);
@@ -172,7 +126,7 @@ end
 
 end
 
-function [XIn, YIn]=getdiffeo(imszX, imszY, maxdistortion,nsteps)
+function [XIn, YIn] = getdiffeo(imszX, imszY, maxdistortion, nsteps)
 
 ncomp=6;
 
@@ -198,4 +152,60 @@ Yn=Yn/sqrt(mean(Yn(:).*Yn(:)));
 YIn=maxdistortion*Yn/nsteps;
 XIn=maxdistortion*Xn/nsteps;
 
+end
+
+function [warpedP] = applydiffeo( P, imgBackground, imsz, YI, XI, c, nsteps)
+    Psz = [ size(P,1), size(P,2), size(P,3) ]; % including 3rd dim even if size is 1.
+            
+    % Upsample by factor of 2 in two dimensions
+    P2=zeros([2*Psz(1:2),Psz(3)]);
+    P2(1:2:end,1:2:end,:)=P;
+    P2(2:2:end,1:2:end,:)=P;
+    P2(2:2:end,2:2:end,:)=P;
+    P2(1:2:end,2:2:end,:)=P;
+    P=P2;
+    Psz=[ size(P,1), size(P,2), size(P,3) ];
+    
+    % Pad image if necessary 
+    x1=round((imsz.X-Psz(1))/2);
+    y1=round((imsz.Y-Psz(2))/2);
+    
+    imgBackground((x1+1):(x1+Psz(1)),(y1+1):(y1+Psz(2)),:)=P;
+        
+    interpIm=imgBackground;
+
+    for quadrant=1:4
+        switch (quadrant)
+            case 1
+                cx=c.xA;
+                cy=c.yA;
+            case 2
+                cx=c.xF-c.xA;
+                cy=c.yF-c.yA;
+            case 3
+                cx=c.xB;
+                cy=c.yB;
+            case 4
+                cx=c.xF-c.xB;
+                cy=c.yF-c.yB;
+        end
+        
+        % prevent sampling out of bounds of the image
+        cy=YI+cy;
+        cx=XI+cx;
+        mask=(cx<1) | (cx>imsz.X) | (cy<1) | (cy>imsz.Y) ;
+        cx(mask)=1;
+        cy(mask)=1;
+        
+
+        for j=1:nsteps % this is the number of steps - Total number of warps is nsteps * quadrant
+            for page = 1:imsz.Z
+                interpIm(:,:,page)=interp2(double(interpIm(:,:,page)),cy,cx);
+            end
+        end
+                
+    end
+    
+    % down sampling to original dimensions
+    warpedP = interpIm(1:2:end, 1:2:end, :);
 end

@@ -34,6 +34,7 @@ numChannels = size(snd,2);
 if mod(L,2) == 1 % formatting data
    pad = zeros(1, numChannels);
    snd = [snd;pad];
+   L = L + 1;
 end
 
 if numel(varargin) == 1

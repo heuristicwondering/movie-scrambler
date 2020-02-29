@@ -2,7 +2,8 @@
 %
 % REQUIRES the Computer Vision System Toolbox.
 % RECOMMENDED to also have the ffmpeg libaries installed and accessible via
-% the command line.
+% the command line. Also the Parallel Computing Toolbox will allow for
+% faster scrambling.
 %
 % NOTES:
 % -- this is not designed to handle very large movies.
@@ -51,16 +52,16 @@ for path2movie = files2scramble
 end
 
 fprintf('\n\n\nThat''s it! All your files should now be scrambled.');
-fprintf('\n\nIf you found this program useful, please consider sharing it.');
+fprintf('\n\nIf you found this program useful, please consider sharing it.\n');
 
 
 function ok = setup()
     % Check that user has the Computer Vision Toolbox installed.
     ok = true;
-    hasIPT = license('test', 'Video_and_Image_Blockset');
+    hasIPT = license('test', 'Distrib_Computing_Toolbox');
     if ~hasIPT
       % User does not have the toolbox installed.
-      message = sprintf('Sorry, but you do not seem to have the Computer Vision Toolbox.\nDo you want to try to continue anyway?');
+      message = sprintf('Sorry, but you do not seem to have the Parallel Computing Toolbox.\nDo you want to try to continue anyway?');
       reply = questdlg(message, 'Toolbox missing', 'Yes', 'No', 'Yes');
       if strcmpi(reply, 'No')
         % User said No, so exit.
@@ -68,7 +69,7 @@ function ok = setup()
         return
       end
     end
-    
+
     % Add needed folders to path.
     [mpath, ~] = fileparts( mfilename('fullpath') );
     addpath( genpath( fullfile( mpath, 'scramblers') ) );
@@ -188,17 +189,17 @@ function scrambledMovie = ScrambleVid( movie, warpParams, maxPhaseShift )
     [scrambledMovie.audio.data, scrambledMovie.audio.shifts4audio] = phaseShift(movie.audio.data, maxPhaseShift);
     
     % scramble video
-    startPool = false; % preventing diffeomorphic from attempting to start it's own pool
-    scrambledMovie.imgData = diffeomorphic(movie.imgData, warpParams, startPool);    
+    usePool = true; % enabling parallel processing.
+    scrambledMovie.imgData = diffeomorphic(movie.imgData, warpParams, usePool);    
         
 end
 
 function filename = WriteVid( movie, path2movie )
     % create filenames to write to
     extIndx = regexp(movie.video.Name, '\.\w*$');
-    filename = movie.video.Name( 1:extIndx-1 );
-    filename = strcat( 'scrambled-', filename, '.avi' );
-    phasesFilename = strcat( 'scrambled-', filename, '.mat' );
+    basename = movie.video.Name( 1:extIndx-1 );
+    filename = strcat( 'scrambled-', basename, '.avi' );
+    phasesFilename = strcat( 'scrambled-', basename, '.mat' );
     filename = fullfile( path2movie, filename );
     phasesFilename = fullfile( path2movie, phasesFilename );
         
